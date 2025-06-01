@@ -22,10 +22,11 @@ def init_weights_kaiming(m):
         nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
         if m.bias is not None:
             nn.init.zeros_(m.bias)
-
+            
 class InitWeightsCallback(Callback):
-    def initialize_callback(self, net):
-        net.module_.apply(init_weights_kaiming)
+    def on_model_initialized(self, net, model, **kwargs):
+        model.apply(init_weights_kaiming)
+
 
 # -------------------------------------------------------------------------
 # 1. 載入資料
