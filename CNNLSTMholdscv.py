@@ -6,7 +6,7 @@ import torch
 import numpy as np
 from skorch import NeuralNetClassifier
 from skorch.callbacks import Callback
-from sklearn.model_selection import GridSearchCV, GroupKFold
+from sklearn.model_selection import GridSearchCV, StratifiedGroupKFold
 from sklearn.metrics import make_scorer, roc_auc_score
 import torch.nn as nn
 import torch.optim as optim
@@ -72,7 +72,7 @@ net = NeuralNetClassifier(
 # -------------------------------------------------------------------------
 # 3. 設定 GridSearchCV
 # -------------------------------------------------------------------------
-cv = GroupKFold(n_splits=5)
+cv = StratifiedGroupKFold(n_splits=5)
 param_grid = {
     'module__conv_out_channels': [32, 64],
     'module__lstm_hidden_size': [128, 256]
@@ -82,7 +82,7 @@ roc_auc_scorer = make_scorer(roc_auc_score, needs_proba=True, multi_class='ovr')
 gs = GridSearchCV(
     estimator  = net,
     param_grid = param_grid,
-    scoring    = roc_auc_scorer,
+    scoring    = 'roc_auc',
     cv         = cv.split(X_all, y_all, groups=groups),
     verbose    = 2
 )

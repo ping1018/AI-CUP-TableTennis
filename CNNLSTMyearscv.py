@@ -84,7 +84,7 @@ param_grid = {
     'module__conv_out_channels': [32, 64],
     'module__lstm_hidden_size': [128, 256]
 }
-roc_auc_scorer = make_scorer(roc_auc_score, needs_proba=True, multi_class='ovr')
+roc_auc_scorer = make_scorer(roc_auc_score,  multi_class='ovr')
 
 # error_score='raise' 可協助找到失敗原因
 gs = GridSearchCV(
