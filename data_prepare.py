@@ -21,7 +21,8 @@ def load_and_preprocess(
       test_size    - 測試集比例
       random_state - 隨機亂數種子
     回傳：
-      包含訓練 / 測試資料與對應標籤，以及四個 LabelEncoder 物件
+      包含訓練 / 測試資料與對應標籤，以及四個 LabelEncoder 物件，
+      以及一個 `group_player_ids` 用來做 GroupKFold 的分群。
     """
     # 1. 讀取官方 train_info.csv，並劃分玩家到訓練 / 測試
     info = pd.read_csv(info_path)
@@ -38,8 +39,11 @@ def load_and_preprocess(
 
     x_train = pd.DataFrame()
     y_train = pd.DataFrame(columns=target_cols)
+    pid_list_train = []   # <- 用來收集每一行對應的 player_id
+
     x_test  = pd.DataFrame()
     y_test  = pd.DataFrame(columns=target_cols)
+    pid_list_test = []    # <- 用來收集測試集每一行對應的 player_id
 
     for file in datalist:
         uid = int(Path(file).stem)
@@ -62,10 +66,12 @@ def load_and_preprocess(
             # 加入訓練集
             x_train = pd.concat([x_train, df], ignore_index=True)
             y_train = pd.concat([y_train, target_rep], ignore_index=True)
+            pid_list_train.extend([pid] * len(df))    # <-- 每一行都要對應這個 pid
         else:
             # 加入測試集
             x_test  = pd.concat([x_test, df], ignore_index=True)
             y_test  = pd.concat([y_test, target_rep], ignore_index=True)
+            pid_list_test.extend([pid] * len(df))     # <-- 每一行都要對應這個 pid
 
     # 3. 特徵標準化到 [0,1]
     scaler = MinMaxScaler()
@@ -75,6 +81,10 @@ def load_and_preprocess(
     # 4. 為了符合 group_size，裁掉尾巴不足一組的資料
     n_train = (len(X_train_scaled) // group_size) * group_size
     n_test  = (len(X_test_scaled)  // group_size) * group_size
+
+    # 同理，pid_list 也只取到 n_train / n_test 的長度
+    pid_train_arr = np.array(pid_list_train)[:n_train]
+    pid_test_arr  = np.array(pid_list_test)[:n_test]
 
     # 轉成 PyTorch tensor
     Xt_train = torch.tensor(
@@ -93,6 +103,15 @@ def load_and_preprocess(
     Xg_test  = Xt_test.view(
         -1, group_size, Xt_test.shape[1]
     )
+
+    # ====== 這裡開始處理 group_player_ids ======
+    # 將 pid_train_arr 先 reshape 成 (num_groups, group_size)，取每組第一筆 pid
+    num_groups_train = n_train // group_size
+    pid_groups_train = pid_train_arr.reshape(num_groups_train, group_size)[:, 0]
+    # 同理，測試集
+    num_groups_test  = n_test // group_size
+    pid_groups_test  = pid_test_arr.reshape(num_groups_test, group_size)[:, 0]
+    # =========================================
 
     # 5. 用 LabelEncoder 分別編碼四個目標
     le_years  = LabelEncoder()
@@ -143,24 +162,28 @@ def load_and_preprocess(
     yg_gender_te  = torch.tensor(gender_test,  dtype=torch.long).view(-1, group_size)[:, 0]
     yg_hold_te    = torch.tensor(hold_test,    dtype=torch.long).view(-1, group_size)[:, 0]
 
-    # 7. 回傳前處理結果
+    # 7. 回傳前處理結果，新增 'group_player_ids'
     return {
-        'X_train':     Xg_train,      # 訓練集特徵
-        'y_years':     yg_years,      # 訓練集球齡標籤
-        'y_level':     yg_level,      # 訓練集等級標籤
-        'y_gender':    yg_gender,     # 訓練集性別標籤
-        'y_hold':      yg_hold,       # 訓練集持拍手標籤
+        'X_train':          Xg_train,         # 訓練集特徵
+        'y_years':          yg_years,         # 訓練集球齡標籤
+        'y_level':          yg_level,         # 訓練集等級標籤
+        'y_gender':         yg_gender,        # 訓練集性別標籤
+        'y_hold':           yg_hold,          # 訓練集持拍手標籤
 
-        'X_test':      Xg_test,       # 測試集特徵
-        'y_years_te':  yg_years_te,   # 測試集球齡標籤
-        'y_level_te':  yg_level_te,   # 測試集等級標籤
-        'y_gender_te': yg_gender_te,  # 測試集性別標籤
-        'y_hold_te':   yg_hold_te,    # 測試集持拍手標籤
+        'X_test':           Xg_test,          # 測試集特徵
+        'y_years_te':       yg_years_te,      # 測試集球齡標籤
+        'y_level_te':       yg_level_te,      # 測試集等級標籤
+        'y_gender_te':      yg_gender_te,     # 測試集性別標籤
+        'y_hold_te':        yg_hold_te,       # 測試集持拍手標籤
 
-        'le_years':    le_years,      # play years 編碼器（反編碼用）
-        'le_level':    le_level,      # level 編碼器（反編碼用）
-        'le_gender':   le_gender,     # gender 編碼器（反編碼用）
-        'le_hold':     le_hold        # hold 編碼器（反編碼用）
+        'le_years':         le_years,         # play years 編碼器（反編碼用）
+        'le_level':         le_level,         # level 編碼器（反編碼用）
+        'le_gender':        le_gender,        # gender 編碼器（反編碼用）
+        'le_hold':          le_hold,          # hold 編碼器（反編碼用）
+
+        'group_player_ids': torch.tensor(pid_groups_train, dtype=torch.long),
+        # 如果你要同時對測試集也做 GroupKFold 可以一併回傳 pid_groups_test
+        'group_player_ids_te': torch.tensor(pid_groups_test,  dtype=torch.long),
     }
 
 
@@ -182,6 +205,8 @@ if __name__ == '__main__':
     print("y_level_te shape: ", data['y_level_te'].shape)
     print("y_gender_te shape:", data['y_gender_te'].shape)
     print("y_hold_te shape:  ", data['y_hold_te'].shape)
+    print("group_player_ids shape:", data['group_player_ids'].shape)
+    print("group_player_ids_te shape:", data['group_player_ids_te'].shape)
     print("\n" + "="*30 + "\n")
 
     # helper：列印一個任務的類別分佈
@@ -209,4 +234,3 @@ if __name__ == '__main__':
     print_dist(data['y_level_te'],  data['le_level'],  "等級 (level)")
     print_dist(data['y_gender_te'], data['le_gender'], "性別 (gender)")
     print_dist(data['y_hold_te'],   data['le_hold'],   "持拍手 (hold)")
-
