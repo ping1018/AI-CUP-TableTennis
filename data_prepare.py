@@ -10,8 +10,7 @@ def load_and_preprocess(
     info_path: str,
     group_size: int = 27,
     test_size: float = 0.2,
-    random_state: int = 42 
-   
+    random_state: int = 42
 ):
     """
     讀取並前處理 AI Cup 資料。
