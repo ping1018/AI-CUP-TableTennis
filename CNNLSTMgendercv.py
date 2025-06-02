@@ -78,11 +78,11 @@ param_grid = {
     'module__lstm_hidden_size': [128, 256]
 }
 
-
+roc_auc_scorer = make_scorer(roc_auc_score, needs_proba=True, multi_class='ovr')
 gs = GridSearchCV(
     estimator  = net,
     param_grid = param_grid,
-    scoring    = 'roc_auc',
+    scoring    = roc_auc_scorer,
     cv         = cv.split(X_all, y_all, groups=groups),
     verbose    = 2
 )
